@@ -105,8 +105,6 @@ function addSpawnPoint(spawn)
         model = GetHashKey(spawn.model)
     end
 
-    print(model)
-
     -- is the model actually a model?
 
     -- is is even a ped?
@@ -214,7 +212,6 @@ function spawnPlayer(spawnIdx, cb)
         -- if the spawn isn't set, select a random one
         if not spawnIdx then
             if IsCharMale then
-                print("random")
                 spawnIdx = 1
             else
                 spawnIdx = GetRandomIntInRange(1, #spawnPoints + 1)
@@ -262,7 +259,13 @@ function spawnPlayer(spawnIdx, cb)
             if type(spawn.model) == 'string' then
                 spawn.model = joaat(spawn.model)
             end
-            print(IsModelInCdimage(spawn.model))
+
+            if not IsModelValid(spawn.model) then
+                Citizen.Trace("tried to spawn with an invalid model\n")
+                spawnLock = false
+                return
+            end
+            
             RequestModel(spawn.model)
             while not HasModelLoaded(spawn.model) do
                 Wait(0)

@@ -23,7 +23,7 @@ AddEventHandler('hostingSession', function()
     end
 
     -- if the current host was last contacted less than a second ago
-    if GetHostId() and currentHosting then
+    if GetHostId() then
         if GetPlayerLastMsg(GetHostId()) < 1000 then
             TriggerClientEvent('sessionHostResult', src, 'conflict')
             return

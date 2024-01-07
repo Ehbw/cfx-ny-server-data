@@ -16,4 +16,4 @@ files {
 loadscreen 'index.html'
 
 fx_version 'bodacious'
-game 'gta5'
+games { 'gta5', 'rdr3', 'gta4' }
