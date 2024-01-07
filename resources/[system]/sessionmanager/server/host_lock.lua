@@ -9,23 +9,23 @@ local hostReleaseCallbacks = {}
 -- TODO: add a timeout for the hosting lock to be held
 -- TODO: add checks for 'fraudulent' conflict cases of hosting attempts (typically whenever the host can not be reached)
 AddEventHandler('hostingSession', function()
+    local src = source
     -- if the lock is currently held, tell the client to await further instruction
     if currentHosting then
-        TriggerClientEvent('sessionHostResult', source, 'wait')
+        TriggerClientEvent('sessionHostResult', src, 'wait')
 
         -- register a callback for when the lock is freed
         table.insert(hostReleaseCallbacks, function()
-            TriggerClientEvent('sessionHostResult', source, 'free')
+            TriggerClientEvent('sessionHostResult', src, 'free')
         end)
 
         return
     end
 
     -- if the current host was last contacted less than a second ago
-    if GetHostId() then
+    if GetHostId() and currentHosting then
         if GetPlayerLastMsg(GetHostId()) < 1000 then
-            TriggerClientEvent('sessionHostResult', source, 'conflict')
-
+            TriggerClientEvent('sessionHostResult', src, 'conflict')
             return
         end
     end
@@ -34,7 +34,8 @@ AddEventHandler('hostingSession', function()
 
     currentHosting = source
 
-    TriggerClientEvent('sessionHostResult', source, 'go')
+    print("go host")
+    TriggerClientEvent('sessionHostResult', src, 'go')
 
     -- set a timeout of 5 seconds
     SetTimeout(5000, function()
@@ -51,10 +52,11 @@ AddEventHandler('hostingSession', function()
 end)
 
 AddEventHandler('hostedSession', function()
+    local src = source
     -- check if the client is the original locker
     if currentHosting ~= source then
         -- TODO: drop client as they're clearly lying
-        print(currentHosting, '~=', source)
+        print(currentHosting, '~=', src)
         return
     end
 

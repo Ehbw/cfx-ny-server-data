@@ -105,10 +105,9 @@ function addSpawnPoint(spawn)
         model = GetHashKey(spawn.model)
     end
 
+    print(model)
+
     -- is the model actually a model?
-    if not IsModelInCdimage(model) then
-        error("invalid spawn model")
-    end
 
     -- is is even a ped?
     -- not in V?
@@ -155,33 +154,33 @@ local function freezePlayer(id, freeze)
     local player = id
     SetPlayerControl(player, not freeze, false)
 
-    local ped = GetPlayerPed(player)
+    local ped = GetPlayerChar(player)
 
     if not freeze then
-        if not IsEntityVisible(ped) then
-            SetEntityVisible(ped, true)
+        if not IsCharVisible(ped) then
+            SetCharVisible(ped, true)
         end
 
-        if not IsPedInAnyVehicle(ped) then
-            SetEntityCollision(ped, true)
+        if not IsCharInAnyCar(ped) then
+            SetCharCollision(ped, true)
         end
 
-        FreezeEntityPosition(ped, false)
+        FreezeCharPosition(ped, false)
         --SetCharNeverTargetted(ped, false)
         SetPlayerInvincible(player, false)
     else
-        if IsEntityVisible(ped) then
-            SetEntityVisible(ped, false)
+        if not IsCharVisible(ped) then
+            SetCharVisible(ped, true)
         end
 
-        SetEntityCollision(ped, false)
-        FreezeEntityPosition(ped, true)
+        SetCharCollision(ped, false)
+        FreezeCharPosition(ped, true)
         --SetCharNeverTargetted(ped, true)
         SetPlayerInvincible(player, true)
         --RemovePtfxFromPed(ped)
 
-        if not IsPedFatallyInjured(ped) then
-            ClearPedTasksImmediately(ped)
+        if not IsCharFatallyInjured(ped) then
+            ClearCharTasksImmediately(ped)
         end
     end
 end
@@ -214,7 +213,12 @@ function spawnPlayer(spawnIdx, cb)
     Citizen.CreateThread(function()
         -- if the spawn isn't set, select a random one
         if not spawnIdx then
-            spawnIdx = GetRandomIntInRange(1, #spawnPoints + 1)
+            if IsCharMale then
+                print("random")
+                spawnIdx = 1
+            else
+                spawnIdx = GetRandomIntInRange(1, #spawnPoints + 1)
+            end
         end
 
         -- get the spawn from the array
@@ -234,11 +238,11 @@ function spawnPlayer(spawnIdx, cb)
         end
 
         if not spawn.skipFade then
-            DoScreenFadeOut(500)
+            --//DoScreenFadeOut(500)
 
-            while not IsScreenFadedOut() do
-                Citizen.Wait(0)
-            end
+            --while not IsScreenFadedOut() do
+            --    Citizen.Wait(0)
+            --end
         end
 
         -- validate the index
@@ -251,24 +255,33 @@ function spawnPlayer(spawnIdx, cb)
         end
 
         -- freeze the local player
-        freezePlayer(PlayerId(), true)
+        freezePlayer(GetPlayerId(), true)
 
         -- if the spawn has a model set
         if spawn.model then
+            if type(spawn.model) == 'string' then
+                spawn.model = joaat(spawn.model)
+            end
+            print(IsModelInCdimage(spawn.model))
             RequestModel(spawn.model)
-
-            -- load the model for this spawn
             while not HasModelLoaded(spawn.model) do
-                RequestModel(spawn.model)
-
                 Wait(0)
             end
+            Wait(1000)
 
             -- change the player model
-            SetPlayerModel(PlayerId(), spawn.model)
+            if SetPlayerModel then
+                SetPlayerModel(PlayerId(), spawn.model)       
+            else
+                ChangePlayerModel(GetPlayerId(), spawn.model)
+            end
 
             -- release the player model
-            SetModelAsNoLongerNeeded(spawn.model)
+            if SetModelAsNoLongerNeeded then
+                SetModelAsNoLongerNeeded(spawn.model)                
+            else
+                MarkModelAsNoLongerNeeded(spawn.model)
+            end
             
             -- RDR3 player model bits
             if N_0x283978a15512b2fe then
@@ -277,21 +290,33 @@ function spawnPlayer(spawnIdx, cb)
         end
 
         -- preload collisions for the spawnpoint
-        RequestCollisionAtCoord(spawn.x, spawn.y, spawn.z)
+        if RequestCollisionAtCoord then
+            RequestCollisionAtCoord(spawn.x, spawn.y, spawn.z)
+        else
+            RequestCollisionAtPosn(spawn.x, spawn.y, spawn.z)
+        end
 
         -- spawn the player
-        local ped = PlayerPedId()
+        local ped = GetPlayerChar(GetPlayerId())
 
         -- V requires setting coords as well
-        SetEntityCoordsNoOffset(ped, spawn.x, spawn.y, spawn.z, false, false, false, true)
+        if SetEntityCoordsNoOffset then
+            SetEntityCoordsNoOffset(ped, spawn.x, spawn.y, spawn.z, false, false, false, true)
 
-        NetworkResurrectLocalPlayer(spawn.x, spawn.y, spawn.z, spawn.heading, true, true, false)
+            NetworkResurrectLocalPlayer(spawn.x, spawn.y, spawn.z, spawn.heading, true, true, false)
+    
+            -- gamelogic-style cleanup stuff
+            ClearPedTasksImmediately(ped)
+            --SetEntityHealth(ped, 300) -- TODO: allow configuration of this?
+            RemoveAllPedWeapons(ped) -- TODO: make configurable (V behavior?)
+            ClearPlayerWantedLevel(PlayerId())
+        else
+            local ply = GetPlayerId()
+            SetCharCoordinates(ped, spawn.x, spawn.y, spawn.z)
+            Citizen.InvokeNative(0x2EE310C5, ply, spawn.x, spawn.y, spawn.z, spawn.heading)
+            ResurrectNetworkPlayer(ply, spawn.x, spawn.y, spawn.z, spawn.heading)
+        end
 
-        -- gamelogic-style cleanup stuff
-        ClearPedTasksImmediately(ped)
-        --SetEntityHealth(ped, 300) -- TODO: allow configuration of this?
-        RemoveAllPedWeapons(ped) -- TODO: make configurable (V behavior?)
-        ClearPlayerWantedLevel(PlayerId())
 
         -- why is this even a flag?
         --SetCharWillFlyThroughWindscreen(ped, false)
@@ -306,12 +331,11 @@ function spawnPlayer(spawnIdx, cb)
         --ForceLoadingScreen(false)
 
         local time = GetGameTimer()
-
-        while (not HasCollisionLoadedAroundEntity(ped) and (GetGameTimer() - time) < 5000) do
-            Citizen.Wait(0)
+        if ShutdownLoadingScreen then
+            ShutdownLoadingScreen()            
+        else
+            ForceLoadingScreen(false)
         end
-
-        ShutdownLoadingScreen()
 
         if IsScreenFadedOut() then
             DoScreenFadeIn(500)
@@ -322,7 +346,7 @@ function spawnPlayer(spawnIdx, cb)
         end
 
         -- and unfreeze the player
-        freezePlayer(PlayerId(), false)
+        freezePlayer(GetPlayerId(), false)
 
         TriggerEvent('playerSpawned', spawn)
 
@@ -339,17 +363,18 @@ local respawnForced
 local diedAt
 
 Citizen.CreateThread(function()
+    spawnPlayer()
     -- main loop thing
     while true do
         Citizen.Wait(50)
 
-        local playerPed = PlayerPedId()
+        local playerPed = GetPlayerChar(GetPlayerId())
 
         if playerPed and playerPed ~= -1 then
             -- check if we want to autospawn
             if autoSpawnEnabled then
-                if NetworkIsPlayerActive(PlayerId()) then
-                    if (diedAt and (math.abs(GetTimeDifference(GetGameTimer(), diedAt)) > 2000)) or respawnForced then
+                if true then
+                    if (diedAt and (math.abs((GetGameTimer() - diedAt)) > 2000)) or respawnForced then
                         if autoSpawnCallback then
                             autoSpawnCallback()
                         else
@@ -361,7 +386,7 @@ Citizen.CreateThread(function()
                 end
             end
 
-            if IsEntityDead(playerPed) then
+            if IsCharDead(playerPed) then
                 if not diedAt then
                     diedAt = GetGameTimer()
                 end
